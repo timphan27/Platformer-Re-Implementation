@@ -61,7 +61,9 @@ class GameScene extends Phaser.Scene {
         this.platformsLayer.setCollisionByProperty({ //enable collision for platforms with property collides = true in Tiled
             collides: true
         });
-
+        this.spikesLayer.setCollisionByProperty({ //make all spikes with collision property true so player can collide with them and take damage
+            collides: true
+        });
         //create player
         this.player = this.physics.add.sprite(
             50,
@@ -74,18 +76,20 @@ class GameScene extends Phaser.Scene {
         this.player.setMaxVelocity(this.MAX_SPEED * 60);
         this.player.setDragX(this.DECELERATION * 60);
 
-        this.physics.add.collider(
+        this.physics.add.collider(  //make player collide with objects on platforms layer
             this.player,
             this.platformsLayer
         );
 
-        this.physics.add.overlap(
+        this.physics.add.collider(
             this.player,
             this.spikesLayer,
             this.takeDamage,
-            (player, tile) => tile.properties?.damage === true,
+            (player, tile) => tile.properties.damage === true,
             this
         );
+
+
 
         this.cursors = this.input.keyboard.createCursorKeys();
 
@@ -187,7 +191,7 @@ class GameScene extends Phaser.Scene {
             this.invincibleTimer -= this.game.loop.delta; //if player is invicible subtract timer by time since last frame
 
             // flicker effect
-            this.player.visible = Math.floor(this.invincibleTimer / 100) % 2; 
+            this.player.visible = Math.floor(this.invincibleTimer / 100) % 2;
 
             if (this.invincibleTimer <= 0) { //if timer runs out turn off invincibility
                 this.isInvincible = false;
@@ -317,7 +321,7 @@ class GameScene extends Phaser.Scene {
 
         this.player.setTint(0xff0000);
 
-        if (this.health <= 0) {
+        if (this.health == 0) { //if player health is reduced to 0, restart level
             this.scene.restart();
         }
     }
