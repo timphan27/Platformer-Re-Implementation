@@ -144,7 +144,7 @@ class GameScene extends Phaser.Scene {
             }
         ).setOrigin(1, 0).setScrollFactor(0);
 
-        this.healthText = this.add.text( //show how many collectibles player has out of total
+        this.healthText = this.add.text( //show playe HEALTH
             this.scale.width - 240,
             100,
             "Health: " + this.health,
@@ -288,7 +288,7 @@ class GameScene extends Phaser.Scene {
 
             // move up 
             if (this.keys.up?.isDown || this.keys.jump.isDown) {
-                this.player.setVelocityY(-100);
+                this.player.setVelocityY(-150);
             }
             // move down
             else if (this.keys.down?.isDown) {
@@ -317,7 +317,7 @@ class GameScene extends Phaser.Scene {
         this.collectiblesLayer.removeTileAt(tile.x, tile.y); //remove tile
 
         this.collected++; //increment counter
-        this.collectText.setText("Collectibles: " + this.collected + " /" + this.totalCollectibles); //update text
+        this.collectText.setText("Collectibles: " + this.collected + " /" + this.totalCollectibles); //update text for collectible total
 
     }
 
@@ -349,7 +349,7 @@ class GameScene extends Phaser.Scene {
 
         this.health--;
 
-        this.healthText.setText("Health: " + this.health);
+        this.healthText.setText("Health: " + this.health); //update health text
 
         this.isInvincible = true;
         this.invincibleTimer = 2000;
