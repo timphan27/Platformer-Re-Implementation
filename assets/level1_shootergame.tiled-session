@@ -1,8 +1,9 @@
 {
-    "activeFile": "",
+    "activeFile": "level.tmj",
     "expandedProjectPaths": [
         "."
     ],
+    "file.lastUsedOpenFilter": "All Files (*)",
     "fileStates": {
         "": {
             "scaleInDock": 1,
@@ -10,10 +11,10 @@
         },
         "level.tmj": {
             "scale": 1,
-            "selectedLayer": 3,
+            "selectedLayer": 4,
             "viewCenter": {
-                "x": -361,
-                "y": -24.5
+                "x": 428,
+                "y": 98.5
             }
         },
         "level.tmj#tilemap-backgrounds_packed": {

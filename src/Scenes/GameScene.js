@@ -44,6 +44,9 @@ class GameScene extends Phaser.Scene {
 
 
     create() {
+
+        this.isClimbing = false; //tracks if the player is able to perform climibing actions
+
         //create level from tilemap
         this.map = this.make.tilemap({ key: "map" });
         this.tileset = this.map.addTilesetImage('tilemap_packed', 'tiles'); //add platformer asset tilemaps
@@ -96,6 +99,8 @@ class GameScene extends Phaser.Scene {
         this.keys = this.input.keyboard.addKeys({
             left: Phaser.Input.Keyboard.KeyCodes.A,
             right: Phaser.Input.Keyboard.KeyCodes.D,
+            up: Phaser.Input.Keyboard.KeyCodes.W,
+            down: Phaser.Input.Keyboard.KeyCodes.S,
             jump: Phaser.Input.Keyboard.KeyCodes.SPACE
         });
 
@@ -274,7 +279,37 @@ class GameScene extends Phaser.Scene {
             this.scene.restart();
         }
 
+        //climbing actions 
+        if (this.isClimbing) {
 
+            // cancel gravity effect so the player can stand in mid air
+            this.player.setVelocityY(0);
+            this.player.body.allowGravity = false; 
+
+            // move up 
+            if (this.keys.up?.isDown || this.keys.jump.isDown) {
+                this.player.setVelocityY(-100);
+            }
+            // move down
+            else if (this.keys.down?.isDown) {
+                this.player.setVelocityY(100);
+            }
+            else { 
+                this.player.setVelocityY(0);
+            }
+
+        } else {
+            // restore normal physics when NOT on ladder
+            this.player.body.allowGravity = true;
+        }
+
+        //CHECK THE TILE THAT THE PLAYER IS ON AND CHECK IF IT IS A CLIMABLE TILE on the platformsLayer
+        const tile = this.platformsLayer.getTileAtWorldXY(
+            this.player.x,
+            this.player.y
+        );
+
+        this.isClimbing = tile?.properties?.climbable === true; //check if player is on a tile with the climbable property to determine if they can climb
     }
 
     collectItem(player, tile) { //call when the player collides with a collectible tile
