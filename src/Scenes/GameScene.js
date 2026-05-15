@@ -294,7 +294,7 @@ class GameScene extends Phaser.Scene {
             else if (this.keys.down?.isDown) {
                 this.player.setVelocityY(100);
             }
-            else { 
+            else {  //stop vertical movement
                 this.player.setVelocityY(0);
             }
 
@@ -312,7 +312,7 @@ class GameScene extends Phaser.Scene {
         this.isClimbing = tile?.properties?.climbable === true; //check if player is on a tile with the climbable property to determine if they can climb
     }
 
-    collectItem(player, tile) { //call when the player collides with a collectible tile
+    collectItem(player, tile) { //callback when the player collides with a collectible tile
 
         this.collectiblesLayer.removeTileAt(tile.x, tile.y); //remove tile
 
@@ -344,7 +344,7 @@ class GameScene extends Phaser.Scene {
         });
     }
 
-    takeDamage(player, tile) {
+    takeDamage(player, tile) { //call when the player collides with a spike tile with the damage property set to true
         if (this.isInvincible) return;
 
         this.health--;
