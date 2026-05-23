@@ -1,178 +1,201 @@
-/**
- * GameScene.js — Main game scene that orchestrates the Player, Level, HUD,
- * and Particles systems. Each lifecycle method (init, preload, create, update)
- * delegates to the appropriate subsystem, keeping this file thin and readable.
- *
- * Scene lifecycle (per DESIGN.md §8.2):
- *   1. init()    — Set constants & state
- *   2. preload() — Load all assets
- *   3. create()  — Instantiate subsystems, wire physics, configure camera
- *   4. update()   — Delegate per-frame logic to Player & Particles
- */
-
 class GameScene extends Phaser.Scene {
     constructor() {
-        super("gameScene");
+        super('GameScene');
     }
 
-    // ─── 1. INIT ──────────────────────────────────────────────────────
-
     /**
-     * Runs before preload. Sets the world gravity to 500 px/s²
-     * (overriding the Phaser config default of 1500).
-     * All game-state variables are initialized here so that
-     * scene.restart() correctly resets everything.
+     * init() runs before preload(). All game constants and mutable
+     * state are initialised here so that scene.restart() resets them.
      */
     init() {
-        // Override world gravity (DESIGN.md §2.3: 500 px/s²)
-        this.physics.world.gravity.y = Player.GRAVITY;
+        // Override gravity to 500 px/s² (the config default is 1500,
+        // but the design specifies an effective gravity of 500).
+        this.physics.world.gravity.y = 500;
+
+        // Player spawn coordinates
+        this.SPAWN_X = 50;
+        this.SPAWN_Y = 200;
+
+        // Collectible state (3 total in the level)
+        this.collectiblesCount = 0;
+
+        // Prevent multiple level-complete triggers
+        this.levelComplete = false;
     }
 
-    // ─── 2. PRELOAD ───────────────────────────────────────────────────
-
     /**
-     * Loads all external assets: tilemap JSON, tileset images, the player
-     * sprite, particle effect images, and audio files. Asset keys match
-     * the names used in create() and by the subsystems.
+     * Load all external assets: tilemap JSON, tileset images,
+     * the player sprite, particle textures, and audio files.
      */
     preload() {
-        // Tilemap data (Tiled JSON export)
-        this.load.tilemapTiledJSON("map", "assets/level.tmj");
+        // Tilemap (Tiled .tmj format)
+        this.load.tilemapTiledJSON('level', 'assets/level.tmj');
 
-        // Tileset images — keys match the Tiled tileset names
-        this.load.image("tiles", "assets/kenney_pixel-platformer/Tilemap/tilemap_packed.png");
-        this.load.image("tilesBackground", "assets/kenney_pixel-platformer/Tilemap/tilemap-backgrounds_packed.png");
+        // Tileset images (paths match the Kenney asset folders)
+        this.load.image('tilemap_tiles', 'assets/kenney_pixel-platformer/Tilemap/tilemap_packed.png');
+        this.load.image('tilemap_bg', 'assets/kenney_pixel-platformer/Tilemap/tilemap-backgrounds_packed.png');
 
-        // Player sprite (24×24 px, loaded as static image)
-        this.load.image("player", "assets/kenney_pixel-platformer/Tiles/Characters/tile_0000.png");
+        // Player sprite — 24×24 pixel character image
+        this.load.image('player', 'assets/kenney_pixel-platformer/Tiles/Characters/tile_0000.png');
 
-        // Particle effect images
-        this.load.image("particleLand", "assets/kenney_particle-pack/PNG (Transparent)/smoke_01.png");
-        this.load.image("particleWalk", "assets/kenney_particle-pack/PNG (Transparent)/Rotated/trace_02_rotated.png");
+        // Particle effect textures
+        this.load.image('walkParticle', 'assets/kenney_particle-pack/PNG (Transparent)/Rotated/trace_02_rotated.png');
+        this.load.image('landingParticle', 'assets/kenney_particle-pack/PNG (Transparent)/smoke_01.png');
 
-        // Audio: "collect" key is the landing/footstep sound (DESIGN.md §6.2)
-        this.load.audio("collect", "assets/kenney_impact-sounds/Audio/footstep_grass_000.ogg");
-
-        // Audio: jump sound effect
-        this.load.audio("jump", "assets/8_BIT_[50_SFX]_Jump_Free_Sound_Effects_N1_BY_jalastram/8_BIT_[50_SFX]_Jump_Free_Sound_Effects_N1_BY_jalastram/SFX_Jump_50.wav");
+        // Audio — jump sound and landing footstep
+        this.load.audio('jump', 'assets/8_BIT_[50_SFX]_Jump_Free_Sound_Effects_N1_BY_jalastram/8_BIT_[50_SFX]_Jump_Free_Sound_Effects_N1_BY_jalastram/SFX_Jump_50.wav');
+        this.load.audio('collect', 'assets/kenney_impact-sounds/Audio/footstep_grass_000.ogg');
     }
 
-    // ─── 3. CREATE ────────────────────────────────────────────────────
-
     /**
-     * Instantiates all game subsystems and wires them together.
-     * Each subsystem's create() handles its own setup, so this method
-     * stays short even as the game grows.
+     * Create all game objects: level, player, effects, HUD,
+     * physics colliders / overlaps, and camera.
      */
     create() {
-        // --- Subsystems ---
-        this.player = new Player(this, 50, 200);
+        // --- Level (tilemap + layers) ---
         this.level = new Level(this);
-        this.particles = new Particles(this);
-        this.hud = new HUD(this, 3);
 
-        // --- Build the level (layers, collision, overlaps) ---
-        this.level.create();
+        // --- Player ---
+        this.player = new Player(this, this.SPAWN_X, this.SPAWN_Y);
 
-        // Give the player a reference to the platforms layer for climbable-tile lookups
-        this.player.platformsLayer = this.level.platformsLayer;
+        // --- Effects (particles + audio) ---
+        this.effects = new Effects(this, this.player);
 
-        // --- Build the HUD (text elements fixed to camera) ---
-        this.hud.create();
+        // --- HUD (collectibles + health text) ---
+        this.hud = new HUD(this);
 
-        // --- Build the particle emitters ---
-        this.particles.create();
+        // --- Physics: player vs platforms (solid collision) ---
+        this.physics.add.collider(this.player.sprite, this.level.platformsLayer);
 
-        // --- Input setup ---
-        this.setupInput();
+        // --- Physics: player vs spikes ---
+        // Tile 69 (thorny vine) is both climbable and damaging. A collider
+        // would push the player out, preventing climbing. Instead, we use an
+        // overlap so the player can overlap with the tile (needed for
+        // climbing) while still taking damage from contact.
+        this.physics.add.overlap(
+            this.player.sprite,
+            this.level.spikesLayer,
+            (_player, tile) => {
+                if (tile.properties && tile.properties.damage) {
+                    this.player.takeDamage();
+                }
+            },
+            null,
+            this
+        );
 
-        // --- Camera setup ---
+        // --- Physics: player vs collectibles (overlap, not solid) ---
+        this.physics.add.overlap(
+            this.player.sprite,
+            this.level.collectiblesLayer,
+            // overlapCallback — collect the tile when it has collectible: true
+            (_player, tile) => {
+                if (tile.properties && tile.properties.collectible) {
+                    this.level.collectiblesLayer.removeTileAt(tile.x, tile.y);
+                    this.collectiblesCount++;
+                    this.hud.updateCollectibles(this.collectiblesCount);
+                }
+            },
+            null,
+            this
+        );
+
+        // --- Physics: player vs flag (overlap triggers level complete) ---
+        this.physics.add.overlap(
+            this.player.sprite,
+            this.level.flagLayer,
+            (_player, tile) => {
+                if (tile.properties && tile.properties.end) {
+                    this.triggerLevelComplete();
+                }
+            },
+            null,
+            this
+        );
+
+        // --- World bounds (wider Y to allow falling below the map) ---
+        const map = this.level.map;
+        this.physics.world.setBounds(0, 0, map.widthInPixels, 1000);
+
+        // --- Camera ---
         this.setupCamera();
     }
 
-    // ─── 4. UPDATE ────────────────────────────────────────────────────
-
     /**
-     * Runs every frame. Delegates to Player.update() for movement/jump/climb
-     * logic, and to Particles.updateWalkEmitter() for the walk dust effect.
-     * Keeping this method short is the main goal of the modular architecture.
-     */
-    update(_time, delta) {
-        // Process player movement, jumping, climbing, invincibility, fall death
-        this.player.update(this.cursors, this.keys, delta);
-
-        // Update walk-particle position and emission based on player movement
-        const walkPos = this.player.getWalkParticlePosition();
-        this.particles.updateWalkEmitter(walkPos.x, walkPos.y, walkPos.isMoving);
-    }
-
-    // ─── Input Setup ──────────────────────────────────────────────────
-
-    /**
-     * Creates two input objects:
-     *   - cursors: Phaser's built-in arrow key tracker
-     *   - keys: WASD + Space for simultaneous binding
-     *
-     * Per DESIGN.md §3, both arrow keys and WASD are active at the same time.
-     */
-    setupInput() {
-        this.cursors = this.input.keyboard.createCursorKeys();
-
-        this.keys = this.input.keyboard.addKeys({
-            left: Phaser.Input.Keyboard.KeyCodes.A,
-            right: Phaser.Input.Keyboard.KeyCodes.D,
-            up: Phaser.Input.Keyboard.KeyCodes.W,
-            down: Phaser.Input.Keyboard.KeyCodes.S,
-            jump: Phaser.Input.Keyboard.KeyCodes.SPACE
-        });
-    }
-
-    // ─── Camera Setup ─────────────────────────────────────────────────
-
-    /**
-     * Configures the main camera to follow the player with smooth lerp,
-     * a small deadzone, and a 1.5× zoom for the pixel-art aesthetic.
-     * Camera bounds are set to the full map dimensions.
+     * Configure the camera to follow the player with smooth
+     * lerp, a deadzone, zoom, and map bounds.
      */
     setupCamera() {
-        this.cameras.main.setBounds(
-            0, 0,
-            this.level.map.widthInPixels,
-            this.level.map.heightInPixels
-        );
+        const cam = this.cameras.main;
+        cam.startFollow(this.player.sprite, false, 0.25, 0.25);
+        cam.setDeadzone(50, 50);
+        cam.setZoom(1.5);
 
-        // Follow the player with lerp (0.25) for smooth tracking
-        this.cameras.main.startFollow(this.player.sprite, true, 0.25, 0.25);
-
-        // Small deadzone: camera only moves when the player leaves this box
-        this.cameras.main.setDeadzone(50, 50);
-
-        // Zoom in 1.5× to emphasize the pixel art
-        this.cameras.main.setZoom(1.5);
+        const map = this.level.map;
+        cam.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
     }
 
-    // ─── Level Completion ─────────────────────────────────────────────
+    /**
+     * Set up keyboard input: arrow keys, WASD, and Space (jump).
+     * All keys are available simultaneously.
+     */
+    createCursors() {
+        return {
+            ...this.input.keyboard.createCursorKeys(),
+            space: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
+            wKey: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
+            aKey: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
+            sKey: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+            dKey: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D)
+        };
+    }
 
     /**
-     * Called by the Level class when the player overlaps a flag tile
-     * with the `end` property. Pauses physics, shows "LEVEL COMPLETE"
-     * text, and restarts the scene after a 1.5-second delay.
+     * Main per-frame update loop. Processes input and delegates
+     * to Player, Effects, and other subsystems.
      */
-    onLevelComplete() {
+    update() {
+        // Create cursors lazily on first update (after scene is fully ready)
+        if (!this.cursors) {
+            this.cursors = this.createCursors();
+        }
+
+        this.player.update(this.cursors);
+        this.effects.update();
+    }
+
+    /**
+     * Called when the player touches a flag tile with end: true.
+     * Pauses physics, shows a completion message, then restarts.
+     */
+    triggerLevelComplete() {
+        if (this.levelComplete) return;
+        this.levelComplete = true;
+
         this.physics.pause();
 
-        // Display completion text centered on the camera viewport
+        // Display "LEVEL COMPLETE" at the top-center of the viewport
+        // scrollFactor(0) keeps it pinned to the camera so it doesn't
+        // drift if the camera finishes lerping after physics pause.
+        const screenCenterX = this.scale.width / 2;
         this.add.text(
-            this.scale.width / 2 + 70, 80,
-            "LEVEL COMPLETE",
-            { fontSize: "40px", fill: "#60e649" }
-        )
-            .setOrigin(1, 0)
-            .setScrollFactor(0);
+            screenCenterX, 80,
+            'LEVEL COMPLETE',
+            { fontSize: '40px', color: '#00ff00' }
+        ).setOrigin(0.5).setScrollFactor(0);
 
-        // Restart after 1.5 seconds
+        // Restart the scene after 1.5 seconds
         this.time.delayedCall(1500, () => {
             this.scene.restart();
         });
+    }
+
+    /**
+     * Restart the level (called on death or fall).
+     * scene.restart() re-runs init(), preload(), create() from
+     * scratch, resetting all state and tile data.
+     */
+    restartLevel() {
+        this.scene.restart();
     }
 }
