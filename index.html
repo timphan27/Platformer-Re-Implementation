@@ -4,7 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hasty Dash</title>
+    <!-- Phaser engine (local copy) -->
     <script src="./lib/phaser.js"></script>
+
+    <!-- Game classes — loaded in dependency order:
+         1. Entity classes (no dependencies on other game classes)
+         2. System classes (may reference entity classes like Player)
+         3. Scene class (uses all of the above)
+         4. Main entry point (creates the Phaser.Game instance)
+    -->
+    <script src="./src/Entities/Player.js"></script>
+    <script src="./src/Systems/Level.js"></script>
+    <script src="./src/Systems/HUD.js"></script>
+    <script src="./src/Systems/Particles.js"></script>
     <script src="./src/Scenes/GameScene.js"></script>
     <script src="./src/main.js"></script>
 </head>
